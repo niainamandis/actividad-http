@@ -30,11 +30,23 @@ def receive_full_message(connection_socket, buff_size, end_sequence):
  
 def parse_HTTP_message(http_message: bytes):
     # separar header del body
+    # nota: agregar b"" => busca en bytes :D
+    headers_cod, body = http_message.split(b"\r\n\r\n")
     # decodificar las lineas del header
+    headers_text = headers_cod.decode()
+    lines = headers_text.split("\r\n")
     # guardar el header en un diccionario
+    headers = {}
+    for line in lines[1:]: #ignoramos lines[0] pke es solo get y http
+        if not line: continue
+        key, val = line.split(": ", 1)
+        headers[key] = val
     # juntarlo con el body y retornar 
-    return 
-
+    return {
+            "f_line": lines[0],
+            "headers": headers,
+            "body": body
+            }
  
  if name == "__main__":
      # definimos el tamaño del buffer de recepción y la secuencia de fin de mensaje
