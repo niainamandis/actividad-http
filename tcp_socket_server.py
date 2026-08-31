@@ -1,31 +1,32 @@
 import socket
  
-def receive_full_message(connection_socket, buff_size, end_sequence):
+def receive_full_message(connection_socket, buff_size):
 
      # recibimos la primera parte del mensaje
-     recv_message = connection_socket.recv(buff_size)
-     full_message = recv_message
+    recv_message = connection_socket.recv(buff_size)
+    full_message = recv_message
+    sep = b"\r\n\r\n"
 
-     # verificamos si llegó el mensaje completo o si aún faltan partes del mensaje
-     is_end_of_message = contains_end_of_message(full_message.decode(), end_sequence)
+    # verificamos que lleguen los headers
+    while sep not in full_message:
+        recv_message = connection_socket.recv(buff_size)
+        full_message += recv_message
 
+    headers_raw, body_raw = full_message.split(sep)
+    header_parsed = parse_HTTP_message(headers_raw + sep)
+
+    #verificamos si llegó todo el contenido de body (o si no tiene == 0)
+    content_length = int(header_parsed["headers"].get("Content-Length",0))
      # entramos a un while para recibir el resto y seguimos esperando información
-     # mientras el buffer no contenga secuencia de fin de mensaje
-     while not is_end_of_message:
+     # mientras el buffer no contenga todo el body
+     while len(body_raw)<content_length:
          # recibimos un nuevo trozo del mensaje
          recv_message = connection_socket.recv(buff_size)
-
          # lo añadimos al mensaje "completo"
-         full_message += recv_message
-
-         # verificamos si es la última parte del mensaje
-         is_end_of_message = contains_end_of_message(full_message.decode(), end_sequence)
-
-     # removemos la secuencia de fin de mensaje, esto entrega un mensaje en string
-     full_message = remove_end_of_message(full_message.decode(), end_sequence)
+         body_raw += recv_message
 
      # finalmente retornamos el mensaje
-     return full_message
+     return headers_raw + sep + body_raw
 
  
 def parse_HTTP_message(http_message: bytes):
