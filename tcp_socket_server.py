@@ -1,5 +1,6 @@
 import socket
 import json
+import sys
  
 def receive_full_message(connection_socket, buff_size):
 
@@ -67,10 +68,12 @@ def create_HTTP_message(parsed_msg: dict):
 
 if __name__ == "__main__":
 
-     with open("config.json") as file:
+    # para leer el nombre o ruta del archivo json
+     config_path = sys.argv[1]
+     with open(config_path) as file:
         data = json.load(file)
 
-     username = data["user"]
+     username = data.get("user", "usuario_desconocido")
      print(f"server iniciado para el usuario: {username} :3")
      # definimos el tamaño del buffer de recepción y la secuencia de fin de mensaje
      buff_size = 4
