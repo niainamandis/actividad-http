@@ -72,62 +72,49 @@ if __name__ == "__main__":
      config_path = sys.argv[1]
      with open(config_path) as file:
         data = json.load(file)
-
      username = data.get("user", "usuario_desconocido")
      print(f"server iniciado para el usuario: {username} :3")
+
      # definimos el tamaño del buffer de recepción y la secuencia de fin de mensaje
      buff_size = 4
      IP_VM = 'localhost'
-     server_socket_address = (IP_VM, 8000)
+     listen_socket_address = (IP_VM, 8000)
      
      print('Creando socket - Servidor')
-         # armamos el socket
-         # los parámetros que recibe el socket indican el tipo de conexión
-         # socket.SOCK_STREAM = socket orientado a conexión
-     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+     # creamos un socket orientado a conexión
+     listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+     # le indicamos al server socket que debe atender peticiones en la dirección address
+     listen_socket.bind(listen_socket_address)
+     # definimos que puede tener hasta 3 peticiones de conexión encoladas
+     listen_socket.listen(3)
      
-         # le indicamos al server socket que debe atender peticiones en la dirección address
-         # para ello usamos bind
-     server_socket.bind(server_socket_address)
-     
-         # luego con listen (función de sockets de python) le decimos que puede
-         # tener hasta 3 peticiones de conexión encoladas
-         # si recibiera una 4ta petición de conexión la va a rechazar
-     server_socket.listen(3)
-     
-         # nos quedamos esperando a que llegue una petición de conexión
+     # nos quedamos esperando a que llegue una petición de conexión
      print(f'... Esperando clientes en http://{IP_VM}:8000')
      while True:
         # cuando llega una petición de conexión la aceptamos
         # y se crea un nuevo socket que se comunicará con el cliente
-        new_socket, new_socket_address = server_socket.accept()
+        client_socket, client_socket_address = listen_socket.accept()
  
-        # luego recibimos el mensaje usando la función que programamos
-        # esta función entrega el mensaje en string (no en bytes) y sin el end_of_message
-        recv_message = receive_full_message(new_socket, buff_size)
+        # recibimos y parseamos la request del cliente
+        recv_message = receive_full_message(client_socket, buff_size)
         parsed_req = parse_HTTP_message(recv_message)
         print(f' -> Se ha recibido la siguiente petición: {parsed_req["f_line"]}')
  
-        
-        html_body = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>CC4303</title></head><body><h1>Bienvenide!</h1></body></html>'.encode()
+        # TODO
 
-         # respondemos un msje http
-        response = {
-                "f_line": "HTTP/1.1 200 OK",
-                "headers": {
-                    "Content-Type": "text/html; charset=utf-8",
-                    "Content-Length": str(len(html_body)),
-                    "Connection": "keep-alive",
-                    "Access-Control-Allow-Origin": "*",
-                    "X-ElQuePregunta": username
-                    },
-                "body": html_body
-                }
- 
-         # el mensaje debe pasarse a bytes antes de ser enviado, para ello usamos encode
-        new_socket.send(create_HTTP_message(response))
- 
-        # cerramos la conexión
-        new_socket.close()
-        print(f"conexión con {new_socket_address} ha sido cerrada")
+        # extraer el host de la request del cliente 
+
+        # crear un socket para el servidor con host y conectarse 
+        
+        # enviar la request al servidor
+
+        # recibir respuesta del servidor 
+
+        # reenviar respuesta al cliente 
+
+        # cerrar la conexión al servidor
+        
+        # cerramos la conexión con el cliente
+        client_socket.close()
+        print(f"conexión con {client_socket_address} ha sido cerrada")
  
