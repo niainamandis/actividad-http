@@ -48,6 +48,21 @@ def parse_HTTP_message(http_message: bytes):
             "body": body
             }
  
+
+# NOTE: debería funcionar pke en ningún momento decodificamos
+# body en parse,,, entonces body debería seguir en bytes
+def create_HTTP_message(parsed_msg: dict):
+    #reconstruir el msje http
+    msg_text = parsed_msg["f_line"] + "\r\n"
+    for key, val in parsed_msg["headers"].items():
+        msg_text += f"{key}" + ": " + f"{val}" + "\r\n"
+    #fin headers "\r\n\r\n"
+    msg_text += "\r\n"
+    #codificarlo
+    header_bytes = msg_text.encode()
+    return header_bytes + parsed_msg["body"]
+
+
  if name == "__main__":
      # definimos el tamaño del buffer de recepción y la secuencia de fin de mensaje
      buff_size = 4
