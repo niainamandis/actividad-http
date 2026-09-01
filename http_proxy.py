@@ -84,13 +84,13 @@ if __name__ == "__main__":
 
      # definimos el tamaño del buffer de recepción y la secuencia de fin de mensaje
      buff_size = 4
-     IP_VM = "127.0.0.1"
+     IP_VM = "192.168.64.2"
      listen_socket_address = (IP_VM, 8000)
      
-     print("Creando socket - Servidor")
+     print("Creando socket de escucha - Proxy")
      # creamos un socket orientado a conexión
      listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-     # le indicamos al server socket que debe atender peticiones en la dirección address
+     # le indicamos al socket de escucha que debe atender peticiones en la dirección address
      listen_socket.bind(listen_socket_address)
      # definimos que puede tener hasta 3 peticiones de conexión encoladas
      listen_socket.listen(3)
