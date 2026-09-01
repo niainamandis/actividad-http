@@ -3,12 +3,12 @@ import json
 import sys
  
 def receive_full_message(connection_socket, buff_size):
-  # recibimos la primera parte del mensaje
+  # recibimos la primera parte para buscar los headers
   recv_message = connection_socket.recv(buff_size)
   full_message = recv_message
   sep = b"\r\n\r\n"
 
-  # verificamos que lleguen los headers
+  # verificamos que lleguen todos los headers
   while sep not in full_message:
     recv_message = connection_socket.recv(buff_size)
     full_message += recv_message
@@ -16,41 +16,37 @@ def receive_full_message(connection_socket, buff_size):
   headers_raw, body_raw = full_message.split(sep)
   header_parsed = parse_HTTP_message(headers_raw + sep)
 
-  # verificamos si llegó todo el contenido de body (o si no tiene == 0)
+  # chequeamos si viene un content-length para saber cuánto body falta leer
   if "Content-Length" in header_parsed["headers"]:
     content_length = int(header_parsed["headers"]["Content-Length"])
-    # entramos a un while para recibir el resto y seguimos esperando información
-    # mientras el buffer no contenga todo el body
+    # loopeamos hasta que el largo del body raw alcance el indicado en el header
     while len(body_raw) < content_length:
-      # recibimos un nuevo trozo del mensaje
       recv_message = connection_socket.recv(buff_size)
-      # lo añadimos al mensaje "completo"
       body_raw += recv_message
+  # o revisamos si el mensaje viene particionado (chuncked)
   elif header_parsed["headers"].get("Transfer-Encoding", "") == "chunked":
+    # el fin de un mensaje chunked es un 0 seguido del sep
     while b"0\r\n\r\n" not in body_raw:
-      # recibimos un nuevo trozo del mensaje
       recv_message = connection_socket.recv(buff_size)
-      # lo añadimos al mensaje "completo"
       body_raw += recv_message
 
-  # finalmente retornamos el mensaje
+  # finalmente retornamos el mensaje en bytes
   return headers_raw + sep + body_raw
 
  
 def parse_HTTP_message(http_message: bytes):
-  # separar header del body
-  # nota: agregar b"" => busca en bytes :D
+  # separaramos header del body
   headers_cod, body = http_message.split(b"\r\n\r\n", 1)
-  # decodificar las lineas del header
+  # pasamos los headers a texto para procesar más fácil
   headers_text = headers_cod.decode()
   lines = headers_text.split("\r\n")
-  # guardar el header en un diccionario
+  # guardarmos el header en un diccionario
   headers = {}
   for line in lines[1:]: # ignoramos lines[0] pke es solo get y http
     if not line: continue
     key, val = line.split(": ", 1)
     headers[key] = val
-  # juntarlo con el body y retornar 
+  # lo juntamos con el body y retornamos 
   return {
     "f_line": lines[0],
     "headers": headers,
@@ -58,8 +54,8 @@ def parse_HTTP_message(http_message: bytes):
   }
  
 
-# NOTE: debería funcionar pke en ningún momento decodificamos
-# body en parse,,, entonces body debería seguir en bytes
+# NOTE: funciona pke en ningún momento decodificamos body en parse,
+# entonces body debería seguir en bytes
 def create_HTTP_message(parsed_msg: dict):
   # reconstruir el msje http
   msg_text = parsed_msg["f_line"] + "\r\n"
@@ -67,12 +63,12 @@ def create_HTTP_message(parsed_msg: dict):
     msg_text += f"{key}: {val}\r\n"
   # fin headers "\r\n\r\n"
   msg_text += "\r\n"
-  # codificarlo
+  # pasamos el string a bytes y pegamos en body tal cual
   header_bytes = msg_text.encode()
   return header_bytes + parsed_msg["body"]
 
 if __name__ == "__main__":
-  # para leer el nombre o ruta del archivo json
+  # cargamos la config desde el json que pasamos desde la terminal 
   config_path = sys.argv[1]
   with open(config_path) as file:
     data = json.load(file)
@@ -84,7 +80,7 @@ if __name__ == "__main__":
 
   print(f"server iniciado para el usuario: {username} :3")
 
-  # definimos el tamaño del buffer de recepción y la secuencia de fin de mensaje
+  # setup inicial del proxy
   buff_size = 4
   IP_VM = "192.168.64.2"
   listen_socket_address = (IP_VM, 8000)
@@ -92,7 +88,8 @@ if __name__ == "__main__":
   print("Creando socket de escucha - Proxy")
   # creamos un socket orientado a conexión
   listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  # le indicamos al socket de escucha que debe atender peticiones en la dirección address
+  # le indicamos al socket de escucha que debe atender peticiones en 
+  # la dirección address (maquina virtual)
   listen_socket.bind(listen_socket_address)
   # definimos que puede tener hasta 3 peticiones de conexión encoladas
   listen_socket.listen(3)
@@ -100,8 +97,7 @@ if __name__ == "__main__":
   # nos quedamos esperando a que llegue una petición de conexión
   print(f"... Esperando clientes en http://{IP_VM}:8000")
   while True:
-    # cuando llega una petición de conexión la aceptamos
-    # y se crea un nuevo socket que se comunicará con el cliente
+    # aceptamos al cliente y guardamos su socket 
     client_socket, client_socket_address = listen_socket.accept()
  
     # recibimos y parseamos la request del cliente
@@ -125,6 +121,7 @@ if __name__ == "__main__":
     if is_image_request: 
       print(f"Mostrando imagen local {image_root}")
 
+      # abrimos la imagen en modo lectura de bytes
       with open("cat.jpg", "rb") as f:
         img_body = f.read()
 
@@ -145,7 +142,8 @@ if __name__ == "__main__":
     elif is_blocked:
       print(f"La página {url_req} está bloqueada")
 
-      # enviar el error 
+      # armamos el html de error
+      # este pide /cat.jpg que lo envia a is_image_resquest 
       html_body = """<!DOCTYPE html> 
         <html lang="es">
           <head><meta charset="UTF-8">
@@ -173,41 +171,40 @@ if __name__ == "__main__":
       # el mensaje debe pasarse a bytes antes de ser enviado
       server_ans = create_HTTP_message(response)
 
-    # sino 
+    # sino: enviar el request al servidor
     else:
-      # enviar el request al servidor
 
-      # extraer el host de la request del cliente 
+      # extraemos el dominio la request del cliente 
       server_domain = parsed_req["headers"]["Host"]
       server_host = server_domain.split(":", 1)[0]
       server_port = int(server_domain.split(":", 1)[1]) if ":" in server_domain else 80
 
-      # crear un socket para el servidor y conectarse 
+      # creamos un socket para hablar con el servidor 
       server_socket_address = (server_host, server_port)
       server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
       print(f"-> Conectando a {server_host}:{server_port}")
       server_socket.connect(server_socket_address)
       print("Conexión con el servidor establecida")
       
-      # hay que añadir el header de quien pregunta 
+      # añadimos al header quién pregunta 
       parsed_req["headers"]["X-ElQuePregunta"] = username
 
       # pasamos la request a bytes para poder enviarla al servidor
       modified_request = create_HTTP_message(parsed_req)
 
-      # enviar la request al servidor
+      # enviamos la request al servidor
       server_socket.send(modified_request)
 
-      # recibir respuesta del servidor 
+      # capturamos la respuesta del servidor 
       server_ans = receive_full_message(server_socket, buff_size)
       server_parsed_req = parse_HTTP_message(server_ans)
       print(f"-> Respuesta recibida del servidor: {len(server_ans)} bytes")
 
-      # cerrar la conexión al servidor
+      # cerramos la conexión con el servidor
       server_socket.close()
       print(f"Conexión con {server_host}:{server_port} ha sido cerrada")
 
-    # reenviar respuesta al cliente 
+    # reenviamos la respuesta al cliente 
     client_socket.send(server_ans)
 
     # cerramos la conexión con el cliente
