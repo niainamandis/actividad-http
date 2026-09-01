@@ -72,7 +72,6 @@ def create_HTTP_message(parsed_msg: dict):
     header_bytes = msg_text.encode()
     return header_bytes + parsed_msg["body"]
 
-
 if __name__ == "__main__":
 
     # para leer el nombre o ruta del archivo json
@@ -80,6 +79,9 @@ if __name__ == "__main__":
      with open(config_path) as file:
         data = json.load(file)
      username = data.get("user", "usuario_desconocido")
+     blocked_url = data.get("blocked", [])
+     image_root = "/cat.jpg"
+
      print(f"server iniciado para el usuario: {username} :3")
 
      # definimos el tamaño del buffer de recepción y la secuencia de fin de mensaje
@@ -106,34 +108,107 @@ if __name__ == "__main__":
         recv_message = receive_full_message(client_socket, buff_size)
         parsed_req = parse_HTTP_message(recv_message)
         print(f"-> Se ha recibido la siguiente petición: {parsed_req["f_line"]}")
+         
+        # revisamos si la página está bloqueada
+        url_req = parsed_req["f_line"].split(" ")[1]
+        url_req = url_req.removeprefix("http://")
+        is_blocked = False
+        for url in blocked_url:
+          if url == url_req:
+            is_blocked = True
 
-        # extraer el host de la request del cliente 
-        server_domain = parsed_req["headers"]["Host"]
-        server_host = server_domain.split(":", 1)[0]
-        server_port = int(server_domain.split(":", 1)[1]) if ":" in server_domain else 80
+        # revisamos si la request es por la imagen local
+        is_image_request = url_req.endswith(image_root)
 
-        # crear un socket para el servidor y conectarse 
-        server_socket_address = (server_host, server_port)
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        print(f"-> Conectando a {server_host}:{server_port}")
-        server_socket.connect(server_socket_address)
-        print("Conexión con el servidor establecida")
+        # si la request es por la imagen
+        if is_image_request: 
+           print(f"Mostrando imagen local {image_root}")
 
-        # enviar la request al servidor
-        server_socket.send(recv_message)
+           with open("cat.jpg", "rb") as f:
+              img_body = f.read()
 
-        # recibir respuesta del servidor 
-        server_ans = receive_full_message(server_socket, buff_size)
-        server_parsed_req = parse_HTTP_message(server_ans)
-        print(f"-> Respuesta recibida del servidor: {len(server_ans)} bytes")
+           response = {
+                "f_line": "HTTP/1.1 200 OK",
+                "headers": {
+                    "Content-Type": "image/jpeg",
+                    "Content-Length": str(len(img_body)),
+                    "Connection": "keep-alive",
+                    "Access-Control-Allow-Origin": "*",
+                    },
+                "body": img_body
+           }
+
+           server_ans = create_HTTP_message(response)
+
+        # si está bloqueada 
+        elif is_blocked:
+           print(f"La página {url_req} está bloqueada")
+
+           # enviar el error 
+           html_body = """<!DOCTYPE html> 
+                          <html lang="es">
+                            <head><meta charset="UTF-8">
+                              <title>CC4303</title>
+                            </head>
+                            <body>
+                              <h1>Página bloqueada</h1>
+                              <img src="/cat.jpg" alt="gato">
+                            </body>
+                          </html>""".encode()
+
+           # respondemos un msje http
+           response = {
+                "f_line": "HTTP/1.1 403 Forbidden",
+                "headers": {
+                    "Content-Type": "text/html; charset=utf-8",
+                    "Content-Length": str(len(html_body)),
+                    "Connection": "keep-alive",
+                    "Access-Control-Allow-Origin": "*",
+                    "X-ElQuePregunta": username
+                    },
+                "body": html_body
+           }
+ 
+           # el mensaje debe pasarse a bytes antes de ser enviado
+           server_ans = create_HTTP_message(response)
+
+        # sino 
+        else:
+          # enviar el request al servidor
+
+          # extraer el host de la request del cliente 
+          server_domain = parsed_req["headers"]["Host"]
+          server_host = server_domain.split(":", 1)[0]
+          server_port = int(server_domain.split(":", 1)[1]) if ":" in server_domain else 80
+
+          # crear un socket para el servidor y conectarse 
+          server_socket_address = (server_host, server_port)
+          server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+          print(f"-> Conectando a {server_host}:{server_port}")
+          server_socket.connect(server_socket_address)
+          print("Conexión con el servidor establecida")
+          
+          # hay que añadir el header de quien pregunta 
+          parsed_req["headers"]["X-ElQuePregunta"] = username
+
+          # pasamos la request a bytes para poder enviarla al servidor
+          modified_request = create_HTTP_message(parsed_req)
+
+          # enviar la request al servidor
+          server_socket.send(modified_request)
+
+          # recibir respuesta del servidor 
+          server_ans = receive_full_message(server_socket, buff_size)
+          server_parsed_req = parse_HTTP_message(server_ans)
+          print(f"-> Respuesta recibida del servidor: {len(server_ans)} bytes")
+
+          # cerrar la conexión al servidor
+          server_socket.close()
+          print(f"Conexión con {server_host}:{server_port} ha sido cerrada")
 
         # reenviar respuesta al cliente 
         client_socket.send(server_ans)
 
-        # cerrar la conexión al servidor
-        server_socket.close()
-        print(f"Conexión con {server_host}:{server_port} ha sido cerrada")
-        
         # cerramos la conexión con el cliente
         client_socket.close()
         print(f"Conexión con {client_socket_address} ha sido cerrada")
