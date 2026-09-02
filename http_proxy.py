@@ -79,7 +79,7 @@ if __name__ == "__main__":
   print(f"server iniciado para el usuario: {username} :3")
 
   # setup inicial del proxy
-  buff_size = 4
+  buff_size = 220 
   IP_VM = "192.168.64.2" # amandis 192.168.64.2
                          # dani 10.0.2.15
   listen_socket_address = (IP_VM, 8000)
@@ -103,6 +103,7 @@ if __name__ == "__main__":
     recv_message = receive_full_message(client_socket, buff_size)
     parsed_req = parse_HTTP_message(recv_message)
     print(f"-> Se ha recibido la siguiente petición: {parsed_req['f_line']}")
+    print(f"Buffer: {buff_size} bytes | Headers: {len(recv_message) - len(parsed_req['body'])} bytes | Body: {len(parsed_req['body'])} bytes | Total: {len(recv_message)} bytes")  
       
     # revisamos si la página está bloqueada
     url_req = parsed_req["f_line"].split(" ")[1]
@@ -198,6 +199,7 @@ if __name__ == "__main__":
       aux_server_ans = receive_full_message(server_socket, buff_size)
       server_parsed_req = parse_HTTP_message(aux_server_ans)
       print(f"-> Respuesta recibida del servidor: {len(aux_server_ans)} bytes")
+      print(f"   Buffer: {buff_size} bytes | Headers: {len(aux_server_ans) - len(server_parsed_req['body'])} bytes | Body: {len(server_parsed_req['body'])} bytes | Total: {len(aux_server_ans)} bytes")  
 
       # reemplazando contenido
       # pasamos a texto para poder buscar las palabras
