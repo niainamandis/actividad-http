@@ -82,7 +82,8 @@ if __name__ == "__main__":
 
   # setup inicial del proxy
   buff_size = 4
-  IP_VM = "192.168.64.2"
+  IP_VM = "192.168.64.2" # amandis 192.168.64.2
+                         # dani 10.0.2.15
   listen_socket_address = (IP_VM, 8000)
   
   print("Creando socket de escucha - Proxy")
@@ -200,12 +201,29 @@ if __name__ == "__main__":
       server_parsed_req = parse_HTTP_message(server_ans)
       print(f"-> Respuesta recibida del servidor: {len(server_ans)} bytes")
 
+      # reemplazando contenido
+      # pasamos a texto para poder buscar las palabras
+      body_text = server_parsed_req["body"].decode()
+      for words in forbidden_words:
+          for bad_word, replacement in words.items():
+              # buscamos en el body todas las palabras baneadas y
+              # las reemplazamos por lo pedido
+              body_text = body_text.replace(bad_word,replacement)
+      new_body = body_text.encode()
+      # actualizamos el body
+      server_parsed_req["body"] = new_body
+      # actualizamos el largo del contenido
+      server_parsed_req["headers"]["Content-Length"] = str(len(new_body))
+      # pasamos la respuesta a bytes para mandarla al server
+      ans_final = create_HTTP_message(server_parsed_req)
+
+
       # cerramos la conexión con el servidor
       server_socket.close()
       print(f"Conexión con {server_host}:{server_port} ha sido cerrada")
 
     # reenviamos la respuesta al cliente 
-    client_socket.send(server_ans)
+    client_socket.send(ans_final)
 
     # cerramos la conexión con el cliente
     client_socket.close()
