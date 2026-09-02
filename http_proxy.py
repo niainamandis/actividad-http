@@ -197,9 +197,9 @@ if __name__ == "__main__":
       server_socket.send(modified_request)
 
       # capturamos la respuesta del servidor 
-      server_ans = receive_full_message(server_socket, buff_size)
-      server_parsed_req = parse_HTTP_message(server_ans)
-      print(f"-> Respuesta recibida del servidor: {len(server_ans)} bytes")
+      aux_server_ans = receive_full_message(server_socket, buff_size)
+      server_parsed_req = parse_HTTP_message(aux_server_ans)
+      print(f"-> Respuesta recibida del servidor: {len(aux_server_ans)} bytes")
 
       # reemplazando contenido
       # pasamos a texto para poder buscar las palabras
@@ -215,7 +215,7 @@ if __name__ == "__main__":
       # actualizamos el largo del contenido
       server_parsed_req["headers"]["Content-Length"] = str(len(new_body))
       # pasamos la respuesta a bytes para mandarla al server
-      ans_final = create_HTTP_message(server_parsed_req)
+      server_ans = create_HTTP_message(server_parsed_req)
 
 
       # cerramos la conexión con el servidor
@@ -223,7 +223,7 @@ if __name__ == "__main__":
       print(f"Conexión con {server_host}:{server_port} ha sido cerrada")
 
     # reenviamos la respuesta al cliente 
-    client_socket.send(ans_final)
+    client_socket.send(server_ans)
 
     # cerramos la conexión con el cliente
     client_socket.close()
