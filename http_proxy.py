@@ -3,9 +3,36 @@ import json
 import sys
  
 def receive_full_message(connection_socket, buff_size):
-  full_message = connection_socket.recv(2192)
-  return full_message
- 
+  # recibimos la primera parte para buscar los headers
+  recv_message = connection_socket.recv(buff_size)
+  full_message = recv_message
+  sep = b"\r\n\r\n"
+
+  # verificamos que lleguen todos los headers
+  while sep not in full_message:
+    recv_message = connection_socket.recv(buff_size)
+    full_message += recv_message
+
+  headers_raw, body_raw = full_message.split(sep)
+  header_parsed = parse_HTTP_message(headers_raw + sep)
+
+  # chequeamos si viene un content-length para saber cuánto body falta leer
+  if "Content-Length" in header_parsed["headers"]:
+    content_length = int(header_parsed["headers"]["Content-Length"])
+    # loopeamos hasta que el largo del body raw alcance el indicado en el header
+    while len(body_raw) < content_length:
+      recv_message = connection_socket.recv(buff_size)
+      body_raw += recv_message
+  # o revisamos si el mensaje viene particionado (chuncked)
+  elif header_parsed["headers"].get("Transfer-Encoding", "") == "chunked":
+    # el fin de un mensaje chunked es un 0 seguido del sep
+    while b"0\r\n\r\n" not in body_raw:
+      recv_message = connection_socket.recv(buff_size)
+      body_raw += recv_message
+
+  # finalmente retornamos el mensaje en bytes
+  return headers_raw + sep + body_raw 
+
 def parse_HTTP_message(http_message: bytes):
   # separaramos header del body
   headers_cod, body = http_message.split(b"\r\n\r\n", 1)
@@ -24,10 +51,9 @@ def parse_HTTP_message(http_message: bytes):
     "headers": headers,
     "body": body
   }
- 
 
-# NOTE: funciona pke en ningún momento decodificamos body en parse,
-# entonces body debería seguir en bytes
+# en ningún momento decodificamos body en parse,
+# entonces body sigue en bytes
 def create_HTTP_message(parsed_msg: dict):
   # reconstruir el msje http
   msg_text = parsed_msg["f_line"] + "\r\n"
